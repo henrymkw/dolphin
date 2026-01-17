@@ -19,6 +19,7 @@ typedef SSIZE_T ssize_t;
 #define SHUT_RDWR SD_BOTH
 #else
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -66,7 +67,7 @@ constexpr u32 NUM_BREAKPOINT_TYPES = 4;
 constexpr int MACH_O_POWERPC = 18;
 constexpr int MACH_O_POWERPC_750 = 9;
 
-const s64 GDB_UPDATE_CYCLES = 100000;
+const s64 GDB_UPDATE_CYCLES = 0xfffffffffff;
 
 static bool s_has_control = false;
 static bool s_just_connected = false;
@@ -1092,6 +1093,12 @@ static void InitGeneric(int domain, const sockaddr* server_addr, socklen_t serve
   int on = 1;
   if (setsockopt(s_tmpsock, SOL_SOCKET, SO_REUSEADDR, (const char*)&on, sizeof on) < 0)
     ERROR_LOG_FMT(GDB_STUB, "Failed to setsockopt");
+
+  // disable nagle's algorithm. this significantly improves latency for small packets, which gdb
+  // uses a lot of
+  int nodelay = 1;
+  if (setsockopt(s_tmpsock, IPPROTO_TCP, TCP_NODELAY, (const char*)&nodelay, sizeof(nodelay)) < 0)
+    WARN_LOG_FMT(GDB_STUB, "Failed to set TCP_NODELAY");
 
   if (bind(s_tmpsock, server_addr, server_addrlen) < 0)
     ERROR_LOG_FMT(GDB_STUB, "Failed to bind gdb socket");
